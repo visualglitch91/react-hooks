@@ -11,7 +11,7 @@ interface State<T> {
 
 function useAsync<T extends (...args: any) => Promise<any>>(
   asyncFunction: T,
-  { immediate = true } = {}
+  { immediate = true, keepResults = false } = {}
 ) {
   type U = Unpromise<ReturnType<T>>;
   const mountedRef = useRef(true);
@@ -28,12 +28,12 @@ function useAsync<T extends (...args: any) => Promise<any>>(
     (...args: any) => {
       const executeId = ++executeCounter.current;
 
-      setState({
+      setState((prevState) => ({
         error: undefined,
-        result: undefined,
+        result: keepResults ? prevState.result : undefined,
         standby: false,
         pending: true,
-      });
+      }));
 
       return asyncFunction(...args)
         .then(
@@ -49,19 +49,23 @@ function useAsync<T extends (...args: any) => Promise<any>>(
               pending: false,
             });
           }
+
+          return { result, error };
         });
     },
-    [asyncFunction]
-  ) as T;
+    [asyncFunction, keepResults]
+  ) as (...args: Parameters<T>) => Promise<{ result: U; error: any }>;
 
   useEffect(() => {
     if (immediate) {
-      execute();
+      (execute as any)();
     }
 
     return () => {
       mountedRef.current = false;
     };
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return useMemo(() => ({ ...state, execute }), [state, execute]);
